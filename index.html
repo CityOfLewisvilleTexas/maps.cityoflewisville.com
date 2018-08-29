@@ -1,0 +1,1378 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no">
+
+
+  <title>COL - GIS</title>
+  <link rel="apple-touch-icon" sizes="180x180" href="images/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="images/favicon-16x16.png">
+  <link rel="manifest" href="images/site201808021112.webmanifest">
+  <link rel="mask-icon" href="images/safari-pinned-tab.svg" color="#5bbad5">
+  <meta name="msapplication-TileColor" content="#603cba">
+  <meta name="theme-color" content="#ffffff">
+  
+
+  <!-- google fonts -->
+  <link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Product+Sans:400,400i,700,700i" rel="stylesheet" type="text/css">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Product+Sans:400,400i,700,700i" rel="stylesheet" type="text/css">
+  
+  <!-- styles -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0-rc.2/css/materialize.min.css">
+
+  <!-- materialize -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0-rc.2/js/materialize.min.js"></script>
+
+    
+  <style>  
+    html,body{
+        overflow:hidden;
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+    }	
+    #mainContainer{
+        height: calc(100vh - 64px);
+        overflow: hidden;
+        padding: 0;
+    }
+	#viewDiv {
+      padding: 0;
+      margin: 0;
+      height: calc(100vh - 64px);
+	  background-color: gray;
+    }
+	#layersContainerLarge{
+	  padding: 1em;
+      margin: 0;
+      height: 100%;
+      overflow:hidden;
+	  background-color: whitesmoke;
+	}
+	li.active > div.collapsible-header{
+		background-color: #5E2590 !important;
+		color: white !important;
+	}
+    .collapsible-body{
+        max-height: 300px;
+        overflow-y: scroll;
+    }
+    .progress{
+        position: absolute;
+        top: 52px;
+        left: 0px;
+        width: 100%;
+    }
+    .tabs .tab a:focus, .tabs .tab a:focus.active{
+        background-color: whitesmoke;
+    }
+    .map-type-button{        
+        font-size: 12px;
+        background-color: #fff;
+        color: #6e6e6e;
+        padding: 0.5em 1em;
+        margin: 0;
+        overflow: hidden;
+        cursor: pointer;
+        text-align: center;
+        display: inline;
+        justify-content: center;
+        align-items: center;
+        transition: background-color 125ms ease-in-out;
+        border-left: solid 1px gainsboro;
+    }
+    .esri-input esri-search__input, input[type=text]:not(.browser-default){
+        height: 32px !important; /*override materializecss*/
+        padding: 0 0.5em !important; /*override materializecss*/
+        margin: 0 !important; /*override materializecss*/
+        font-size: 0.9em !important; /*override materializecss*/
+    }
+    div.esri-search__sources-button{
+        display:none !important;
+    }
+  </style>
+
+  <link rel="stylesheet" href="https://js.arcgis.com/4.8/esri/css/main.css">
+  <script src="scripts/dragdroptouch.js"></script>
+  <script src="https://js.arcgis.com/4.8/"></script>
+  
+  <script>
+  
+	//ArcGIS Javascript API - Dojo REQUIRE for libraries
+    require([
+	  "esri/Map",
+      "esri/views/MapView",
+
+      "esri/layers/MapImageLayer",	  
+      "esri/layers/WebTileLayer",
+      "esri/layers/TileLayer",
+      "esri/layers/FeatureLayer",
+      "esri/layers/support/LOD",
+
+	  "esri/request",
+	  "esri/config",
+      "esri/Basemap",
+      
+	  "esri/widgets/BasemapGallery",
+	  "esri/widgets/BasemapGallery/support/LocalBasemapsSource",
+	  "esri/widgets/Print",
+      "esri/widgets/Expand",
+      "esri/widgets/Search",
+      "esri/widgets/Legend",
+
+      "esri/core/watchUtils",
+      "esri/tasks/Locator",
+
+	  "esri/views/2d/draw/Draw",
+      "esri/Graphic",
+
+      "esri/geometry/Polyline",
+      "esri/geometry/geometryEngine",
+	  "esri/geometry/support/webMercatorUtils",
+	  
+	  "dojo/dom", 
+	  "dojo/on",  
+      "dojo/query",
+      "dojo/request/xhr",
+	  "dojo/dom-construct",
+      "dojo/domReady!"
+    ], function(
+      Map, MapView, 
+      MapImageLayer, WebTileLayer, TileLayer,FeatureLayer, LOD,
+      esriRequest, esriConfig, Basemap, BasemapGallery, LocalBasemapsSource, Print, Expand, Search, Legend, watchUtils, Locator,
+	  Draw, Graphic, Polyline, geometryEngine, webMercatorUtils, 
+	  dom, on, query, xhr, domConstruct,ProgressBar
+    ) {
+	
+        var APP = (function(){
+            return {
+                data: {                    
+                    map: [],
+                    mapView: [],
+                    mapZoom: 13,
+                    basemap: "streets-navigation-vector",
+                    groups: [],
+                    layers: {},
+                    layersFromServer: [],
+                    isMobile: false,
+                    isEmployee: false,
+                    widgets: {
+                        basemapGallery_BasemapSource: []
+                    },
+                    mostRecentAerialDate: ''
+                },
+                init: function(){
+                    var _app = this                    
+                    _app.setIsMobile()
+                    _app.createConfigs()
+                    _app.createMap()
+                    _app.createWidget_BasemapGallery()
+                    _app.createWidget_ProgressBar()
+                    _app.createWidget_Search()
+                    _app.createNearmapAerials()
+                    _app.createWidget_Print()
+                    _app.createWidget_2dMeasure()
+                    _app.createWidget_Streetview()		
+                    _app.createWidget_SaveSettings()	 
+                    _app.createWidget_MapTypeButtons()
+                    _app.createWidget_Legend()
+                    _app.setIsEmployee()
+                    _app.get_GroupsList(
+                        function(){
+                            _app.get_LayerList({avlOnly: false,includeEmployeeLayers: _app.data.isEmployee
+                        },
+                        function(){                            
+                            _app.settings.applyFromUrl()
+                        })                        
+                    })                 
+                },
+                createConfigs: function(){
+                    //Add domains that accept CORS
+                    esriConfig.request.corsEnabledServers.push("spreadsheets.google.com","query.cityoflewisville.com","adaptergis.cityoflewisville.com")
+                },
+                createMap: function(){
+                    var _app = this
+                    
+                    _app.data.map = new Map({
+                        basemap: _app.data.basemap
+                    })
+
+                    _app.data.mapView = new MapView({
+                        container: "viewDiv",
+                        map: _app.data.map,
+                        zoom: _app.data.mapZoom,
+                        center: [-96.9571323598633,33.04874516100256],
+                        constraints: {
+                            lods: _app.LevelsOfDetail()
+                        }
+                    })                    
+                },
+                createWidget_ProgressBar: function(){
+                    var _app = this
+
+                    _app.data.mapView.watch("updating",function(_event){
+                        query(".progress").style("display",(_event == true ? "block" : "none"))
+                    })
+                },
+                createWidget_MapTypeButtons: function(){
+                    var _app = this
+
+                    var _mapTypeButtonUI = ''
+                    _mapTypeButtonUI += '<div>'
+                    _mapTypeButtonUI += '<div class="map-type-button" id="mapTypeToggle_Map">Map</div>'
+                    _mapTypeButtonUI += '<div class="map-type-button" id="mapTypeToggle_Sat">Satellite</div>'
+                    _mapTypeButtonUI += '<div class="map-type-button" id="mapTypeToggle_Lew" title="Historical aerials are in the basemap widget →">Lewisville Aerials</div>'
+                    _mapTypeButtonUI += '</div>'
+
+                    var _mapButton = domConstruct.toDom(_mapTypeButtonUI)                    
+                    
+                    //Remove the zoom buttons
+                    _app.data.mapView.ui.add(_mapButton, "top-left",0)
+                    _app.data.mapView.ui.move("zoom", "bottom-left",1)
+                    
+                    //mapTypeToggle_Map
+                    document.getElementById("mapTypeToggle_Map").onclick = function(){
+                        _app.data.map.basemap = _app.data.basemap
+                    }
+                    //mapTypeToggle_Sat
+                    document.getElementById("mapTypeToggle_Sat").onclick = function(){
+                        _app.data.map.basemap = "satellite"
+                    }                        
+                    //mapTypeToggle_Lew
+                    document.getElementById("mapTypeToggle_Lew").onclick = function(){
+                        document.querySelector('[title="Lewisville Aerials: (' +  _app.data.mostRecentAerialDate + ')"]').click()
+                    }
+                   
+                },
+                createWidget_Search: function(){
+                    var _app = this
+
+                    //Generic esri geocoder and parcels layer
+                    var _sources = [
+                        {
+                            locator: new Locator({ url: "//geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer" }),
+                            singleLineFieldName: "SingleLine",
+                            name: "Custom Geocoding Service",
+                            localSearchOptions: {
+                                minScale: 300000,
+                                distance: 50000
+                            },
+                            placeholder: "Addresses",
+                            maxResults: 3,
+                            maxSuggestions: 6,
+                            suggestionsEnabled: false,
+                            minSuggestCharacters: 0
+                        }, {
+                            featureLayer: new FeatureLayer({
+                                url: "https://adaptergis.cityoflewisville.com/arcgis/rest/services/GEM/GEM_Parcels/FeatureServer/0",
+                                outFields: ["*"]
+                            }),
+                            searchFields: ["RNUMBER"],
+                            displayField: "RNUMBER",
+                            exactMatch: false,
+                            outFields: ["*"],
+                            name: "Parcels",
+                            placeholder: "Parcels",
+                            maxResults: 6,
+                            maxSuggestions: 6,
+                            suggestionsEnabled: true,
+                            minSuggestCharacters: 0
+                        }
+                    ]
+                    var _searchWidget = new Search({
+                        view: _app.data.mapView,
+                        sources: _sources,
+                        allPlaceholder: "Address or Parcel"
+                    })
+
+                    // Add the search widget to the top right corner of the view
+                    _app.data.mapView.ui.add(_searchWidget, {
+                        position: "top-right",
+                        index: 0
+                    })
+                    
+                    //Mobile devices: Hide input box until user clicks the search button
+                    if (_app.data.isMobile == true){                          
+                        setTimeout(function(){   
+                            query(".esri-search__input-container").style("display","none")
+                            document.querySelectorAll(".esri-component.esri-search.esri-widget")[0].style.width = "32px"
+                            query(".esri-component.esri-search.esri-widget").onclick(function(){
+                                query(".esri-search__input-container").style("display","block")
+                                query(".esri-component.esri-search.esri-widget").style("width","302px")
+                            })
+                        },1500)
+                    }
+
+                     //Materialize Tooltips
+                     _searchWidget.container.classList.add("tooltipped")
+                     _searchWidget.container.setAttribute("data-position","left")
+                     _searchWidget.container.setAttribute("data-tooltip","Find addresses or parcels →")
+                    
+                    if (window.M){
+                        var _tooltips = document.querySelectorAll('.tooltipped')
+                        var _tooltips_instances = M.Tooltip.init(_tooltips)
+                    }
+                },
+                createWidget_BasemapGallery: function(){
+                    var _app = this
+                                
+                    _app.data.widgets.basemapGallery_BasemapSource = new LocalBasemapsSource({
+                        basemaps: [
+                            Basemap.fromId("dark-gray"),
+                            Basemap.fromId("streets-navigation-vector")						
+                        ]
+                    })	
+
+                    var _basemapGallery = new BasemapGallery({
+                        view: _app.data.mapView,
+                        container: document.createElement("div"),
+                        source: _app.data.widgets.basemapGallery_BasemapSource
+                    })
+
+                    var _expand = new Expand({
+                        view: _app.data.mapView,
+                        content: _basemapGallery.container,
+                        expandIconClass: "esri-icon-basemap",
+                        expandTooltip: "Aerials and Basemaps"
+                    })
+                    
+                    _app.data.mapView.ui.add(_expand, {
+                        position: "top-right",
+                        index: 1
+                    })
+
+                    //Materialize Tooltips
+                    _expand.container.classList.add("tooltipped")
+                    _expand.container.setAttribute("data-position","left")
+                    _expand.container.setAttribute("data-tooltip","Basemaps/Aerials →")
+                    
+                    if (window.M){
+                        var _tooltips = document.querySelectorAll('.tooltipped')
+                        var _tooltips_instances = M.Tooltip.init(_tooltips)
+                    }
+                },
+                createWidget_Legend: function(){
+                    var _app = this
+
+                    var _expand = new Expand({
+                        content: new Legend({
+                            view: _app.data.mapView,
+                            style: "classic" // other styles include 'classic'
+                        }),
+                        view: _app.data.mapView,
+                        expanded: false
+                    });
+                    _app.data.mapView.ui.add(_expand, "top-right");
+
+                    //Materialize Tooltips
+                    _expand.container.classList.add("tooltipped")
+                    _expand.container.setAttribute("data-position","left")
+                    _expand.container.setAttribute("data-tooltip","Legend →")
+                    
+                    if (window.M){
+                        var _tooltips = document.querySelectorAll('.tooltipped')
+                        var _tooltips_instances = M.Tooltip.init(_tooltips)
+                    }
+                },
+                createNearmapAerials: function(){
+                    //https://developers.arcgis.com/javascript/latest/api-reference/esri-Map.html#basemap
+                    //https://gist.github.com/izevaka/32727112d4bd876d8c4bae2d96703b0b
+                    var _app = this
+
+                    //Get aerial dates and api token
+                    var _url = "https://query.cityoflewisville.com/v2/?webservice=NearmapTicketAndDates"
+                    
+                    esriRequest(_url).then(function(_response){		
+
+                        var _ticket = _response.data[0][0].ticket
+                        var _aerialDates = JSON.parse(_response.data[0][0].aerialdates)
+                        
+                        //Set _app.data.mostRecentAerialDate for other functions to reference
+                        _app.data.mostRecentAerialDate = _aerialDates.map(function(e) { return e.date.toString().replace(/\./g,'-'); }).sort().reverse()[0]
+                       
+                       
+                        _aerialDates.forEach(function(_a){
+                            var _date = _a.date.toString().replace(/\./g,'')
+                            var _dateFormatted = _a.date.toString().replace(/\./g,'-')
+
+                            //WebTileLayer
+                            var _nearmap_WebTileLayer = new WebTileLayer({
+                                urlTemplate: "https://us{subDomain}.nearmap.com/maps/?z={level}&x={col}&y={row}&nml=V&version=2&nmd="+ _date +"&ticket=" + _ticket,
+                                subDomains: ["0", "1", "2", "3"],
+                                copyright: "Nearmap"
+                            })
+
+                            //Add to basemap gallery					
+                            _app.data.widgets.basemapGallery_BasemapSource.basemaps.push(
+                                new Basemap({
+                                    baseLayers: [_nearmap_WebTileLayer],
+                                    title: "Lewisville Aerials: (" + _dateFormatted + ")",
+                                    id: "nearmap_" + _date
+                                })
+                            )
+                        })
+                    })
+                },
+                createWidget_Print: function(){
+                    var _app = this
+                    
+                    var _widget_Print = new Print({
+                        view: _app.data.mapView,
+                        container: document.createElement("div"),
+                        printServiceUrl: "https://adaptergis.cityoflewisville.com/arcgis/rest/services/Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task"
+                    });
+
+                    var _expand = new Expand({
+                        view: _app.data.mapView,
+                        content: _widget_Print.container,
+                        expandIconClass: "esri-icon-printer",
+                        expandTooltip: "Print"
+                    });                    
+
+                    _app.data.mapView.ui.add(_expand, "top-right")
+
+                    //Materialize Tooltips
+                    _expand.container.classList.add("tooltipped")
+                    _expand.container.setAttribute("data-position","left")
+                    _expand.container.setAttribute("data-tooltip","Print →")
+                    
+                    if (window.M){
+                        var _tooltips = document.querySelectorAll('.tooltipped')
+                        var _tooltips_instances = M.Tooltip.init(_tooltips)
+                    }
+                },
+                createWidget_2dMeasure: function(){
+                    var _app = this
+
+                    var _html = ''
+                        _html += '<div id="line-button" class="waves-effect esri-widget--button esri-widget esri-interactive tooltipped" '
+                        _html += ' data-position="left" data-tooltip="Measure Distance →">'
+                        _html += ' <span class="esri-icon-polyline"></span>'
+                        _html += '</div>'
+
+                    var _domElement = domConstruct.toDom(_html)                        
+                    domConstruct.place(_domElement,"viewDiv") 
+                    
+                    //Materialize Tooltips
+                    if (window.M){
+                        var _tooltips = document.querySelectorAll('.tooltipped');
+                        var _tooltips_instances = M.Tooltip.init(_tooltips);
+                        var _thisTooltip = M.Tooltip.getInstance(_domElement)
+                        
+                        if (!window.localStorage.measure2dDiscoveryCount || window.localStorage.measure2dDiscoveryCount < 2){
+                            setTimeout(function(){
+                                _thisTooltip.open()
+                            },2000)                        
+                            setTimeout(function(){
+                                _thisTooltip.close()
+                            },5000)
+                            window.localStorage.measure2dDiscoveryCount = (window.localStorage.measure2dDiscoveryCount ? parseInt(window.localStorage.measure2dDiscoveryCount) + 1 : 1)
+                        }
+                    }
+
+                    _app.data.mapView.ui.add("line-button", "top-right");
+                
+                    _app.widget_2dMeasure.init(_app.data.mapView)
+                },
+                createWidget_Streetview: function(){
+                    var _app = this
+                    
+                    var _html = ''
+                    _html += '<!--Streetview (hide in mobile layout)--> '                  
+                    _html += '<div id="pegmanDiv" '
+                    _html += '  class="esri-widget--button esri-widget esri-interactive hide-on-med-and-down"'
+                    _html += '  style="padding-top:4px; padding-left:4px;">'
+                    _html += '  <span><img id="pegman" src="images/pegman.png" draggable="true"/></span>'
+                    _html += '</div>'
+
+                    var _pegmanElement = domConstruct.toDom(_html)                        
+                    domConstruct.place(_pegmanElement,"viewDiv") 
+
+                    _app.data.mapView.ui.add("pegmanDiv", "bottom-right");
+
+                    var popupBlockerChecker = {
+                        check: function(popup_window){
+                            var _scope = this;
+                            if (popup_window) {
+                                if(/chrome/.test(navigator.userAgent.toLowerCase())){
+                                    setTimeout(function () {
+                                        _scope._is_popup_blocked(_scope, popup_window);
+                                    },200);
+                                }else{
+                                    popup_window.onload = function () {
+                                        _scope._is_popup_blocked(_scope, popup_window);
+                                    };
+                                }
+                            } else {
+                                _scope._displayError();
+                            }
+                        },
+                        _is_popup_blocked: function(scope, popup_window){
+                            if ((popup_window.innerHeight > 0)==false){ 
+                                scope._displayError();
+                            }
+                        },
+                        _displayError: function(){
+                            if (window.M){
+                                var _isChrome = (/chrome/.test(navigator.userAgent.toLowerCase()) ? true : false)
+                                var _ChromeHtml = (_isChrome == true ? '<span class="yellow-text">&nbsp In the address bar, click the allow-popups button</span>' : '' )
+                                
+                                M.toast({
+                                    html: 'Street-level imagery opens in a new tab. Please enable popups for this sight.' + _ChromeHtml + '&nbsp <button id="popupsNotAllowedAlertDismiss" class="btn-flat toast-action" onclick="M.Toast.dismissAll();">Dismiss</button>',
+                                    displayLength: 10000
+                                })
+                            }
+                        }
+                    };
+                    
+                    //Events
+                    on(dom.byId("pegman"), "dragstart", function(_event){
+                        console.log("dragstart")
+                        
+                        //Turn on street layer
+                        _app.settings.app.layers.set("1110",0)
+
+                        var img = new Image(); 
+                        img.src = 'pegmandrag.png'; 
+                        _event.dataTransfer.setDragImage(img, 20, 20);
+                        _event.dataTransfer.dropEffect = "move";
+                    })
+
+                    on(dom.byId("pegman"), "dragend", function(_event){
+                        console.log("dragend")
+                        //Turn off street layer
+                        _app.settings.app.layers.set("1110",0)
+
+                        //DragDropTouch.js library causes _event x and y to become pageX and pageY?
+                        var _x = (_event.x ? _event.x : _event.pageX)
+                        var _y = (_event.y ? _event.y : _event.pageY)
+
+                        //Get point and convert to lat/lng
+                        var _point = _app.data.mapView.toMap({x:_x,y:_y})
+                        var _latlng = _point.latitude + "," + _point.longitude                                      
+                        
+                        //Create an anchor element to hyperlink to Streetview url in new tab
+                        var popup = window.open("https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=" + _latlng + "&pitch=0&fov=90", '_blank');
+                        popupBlockerChecker.check(popup);
+                    })
+
+                    on(dom.byId("viewDiv"),"dragover",function(_event){
+                        _event.preventDefault()
+                    })
+                    
+                },
+                createWidget_SaveSettings: function(){
+                    var _app = this
+
+                    on(query(".saveButton"),"click",function(_event){
+                        _event.preventDefault()
+                        _app.settings.saveToUrl()
+                    })
+                },               
+                get_GroupsList: function(_callback){
+                    var _app = this
+                    var _url = "https://spreadsheets.google.com/feeds/list/1cfXNQvbLiKUy0QYQGoArx98nwC7w5l_pKbfHqUxfyIQ/2/public/values?&alt=json"
+                   
+                    esriRequest(_url).then(function(_response){
+
+                        //Format Google Spreadsheet response
+                        var _groups = _response.data.feed.entry.map(function(e){
+                            var r = {};
+                            Object.keys(e).forEach(function(x){
+                                if(x.substr(0,4)=='gsx$' || x=='updated'){
+                                    r[x.replace('gsx$','')] = e[x].$t;
+                                }
+                            });
+                            return r;
+                        })
+                        
+                        //Remove groups with no layers
+                        _groups = _groups.filter(function(_g){
+                            return parseInt(_g.empandpubliclayers) > 0
+                        })
+
+                        //Non-employee users - remove groups with only employee-layers
+                        _groups = _groups.filter(function(_g){
+                            return parseInt(_g.publiclayers) > 0
+                        })
+
+                        //Sort by the "sortorder" field
+                        _groups = _groups.sort(function(a,b){
+                            return (a.sortorder > b.sortorder ? 1 :-1)
+                        })
+
+                        //Return an array of group-names
+                        _app.data.groups = _groups.map(function(_m){
+                            return _m.name
+                        })
+                        
+                        //Make accordion tab for each group
+                         _app.data.groups.forEach(function(_g){
+                            _app.layerAccordion.addNewGroup(_g)
+                        })	
+
+                        if (_callback){
+                            _callback()
+                        }
+                    })
+                },
+                get_LayerList: function(_settings,_callback){
+                    var _app = this
+
+                    //Query for the Google Spreadsheet data
+                        var _avlonly = ""
+                        if (_settings.avlOnly == false){
+                            _avlonly = 'and avlonly<>TRUE'
+                        }
+                        var _query = 'label>"" and id<>"ID"' + _avlonly
+                    
+                    //Exclude employeesonly layers if _app.isEmployee = True
+                        if (_settings.includeEmployeeLayers == false){
+                            _query += ' and employeesonly<>TRUE'
+                        }
+
+                    //Google Spreadsheet feeds/list url
+                        var _url = "https://spreadsheets.google.com/feeds/list/1cfXNQvbLiKUy0QYQGoArx98nwC7w5l_pKbfHqUxfyIQ/1/public/values?&alt=json&sq=" + encodeURIComponent(_query)
+                    
+                    //Ajax to Google Spreadsheet
+                        esriRequest(_url).then(function(_response){
+                            
+                            //Format Google Spreadsheet response
+                            _app.data.layersFromServer = _response.data.feed.entry.map(function(e){
+                                var r = {};
+                                Object.keys(e).forEach(function(x){
+                                    if(x.substr(0,4)=='gsx$' || x=='updated'){
+                                        r[x.replace('gsx$','')] = e[x].$t;
+                                    }
+                                });
+                                return r;
+                            })
+
+                            //Add individual layers to toggle-UI			
+                            _app.data.layersFromServer.forEach(function(_lyr){
+                                _app.layerAccordion.addNewToggleButton(_lyr)
+                            })
+
+                            //Turn on open-on-load-layers
+                            _app.data.layersFromServer.forEach(function(_lyr){
+                                if (_lyr.openonload.toLowerCase() == "true"){
+                                    _app.layerAccordion.addNewLayer(_lyr)
+                                }
+                            })
+                        }).then(function(){
+                            if (_callback){
+                                _callback()
+                            }
+                        })
+                },
+                layerAccordion: {
+                    addNewGroup: function(_groupname){
+                        var _app = APP
+                        var _this = _app.layerAccordion
+
+                        var _html =  '<li>'
+                            _html += ' <div class="collapsible-header">'+_groupname+'</div>'
+                            _html += ' <div class="collapsible-body" id="group_'+_groupname+'"></div>'
+                            _html += '</li>'
+
+                        var _newAccordionTab = domConstruct.toDom(_html)
+                        
+                        domConstruct.place(_newAccordionTab,"layerToggle")                      
+
+                        //Open "Main" tab
+                        var _instance = M.Collapsible.getInstance(document.getElementById("layerToggle"))
+                        _instance.open(0)
+                    },
+                    addNewToggleButton: function(_layer){
+                        var _app = APP
+                        var _this = _app.layerAccordion
+                        var _employeesOnlyLabel = ' <small class="yellow lighten-4" style="padding:0.5em; font-weight:bold; font-size:0.6em;" title="This layer is visible only to employees who are logged-in.">*Employee-Only</small>'
+                        var _hideFromUserLayers = (_layer.hidefromuser.toLowerCase() == "true" ? 'display:none;' : '')
+                        
+                        var _html =  '<div style="'+_hideFromUserLayers+'">'
+                            _html += ' <label>'
+                            _html += '   <input type="checkbox" id="lyr_'+_layer.id+'" '+(_layer.openonload.toLowerCase() == "true" ? "checked" : "")+'>'
+                            _html += '   <span class="black-text">' + _layer.label + (_layer.employeesonly.toLowerCase() == "true" ? _employeesOnlyLabel : '') + '</span>'
+                            _html += ' </label>'
+                            _html += '</div>'
+
+                            _html += '<div class="layerToggle_ExtraInfo" style="'+_hideFromUserLayers+'">'
+                            _html += ' <p style="padding-left: 35px; margin-top: 0;"><small><b>Source: </b>' + (_layer.source.length > 0 ? _layer.source : 'N/A' ) + '</small></p>'
+                            _html += '</div>'
+
+                        var _newCheckbox = domConstruct.toDom(_html)
+                        var _groupToAppendTo = "group_"+_layer.groupname
+                        domConstruct.place(_newCheckbox,_groupToAppendTo)
+                            
+                        // Create a variable referencing the checkbox node
+                        var _toggle = dom.byId("lyr_" + _layer.id);
+                        
+                        _this.addNewLayer_ChangeEvent(_toggle)
+                    },            
+                    addNewLayer: function(_lyr, _visible){
+                        var _app = APP
+                        var _this = _app.layerAccordion
+                        
+                        //Popup template
+                        var _popupTemplate = []
+                        try {
+                            _popupTemplate = JSON.parse(_lyr.popuptemplate)
+                        }catch(_error){
+                            _popupTemplate = "HI"
+                        }
+                        
+                        //What kind of layer?
+                        var _layerType = 'MapImageLayer'
+                        
+                        esriRequest(_lyr.url + "?f=json").then(function(_response){	
+                            
+                            if (_response.data.hasOwnProperty("tileInfo") == true){
+                                _layerType = "TileLayer"
+                            }
+
+                            var _newLayer = {}
+
+                            //Sublayers
+                            var _subLayers = []
+
+                            if (_lyr.layerzeroonly.toLowerCase() == "true"){
+                                _subLayers.push({
+                                    id: 0,
+                                    popupTemplate: _popupTemplate
+                                })
+                            }else{
+                                //Sort in descending order by "id" to turn the layers on in the correct order
+                                _response.data.layers.sort(function(a,b){
+                                    return (a.id < b.id) ? 1 : ((b.id < a.id) ? -1 : 0)
+                                }).forEach(function(_layer){
+                                    _subLayers.push({
+                                        id: _layer.id,
+                                        popupTemplate: _popupTemplate,
+                                        visible: true
+                                    })
+                                })
+                            }
+
+                            if (_layerType == "MapImageLayer"){
+                                _newLayer =  new MapImageLayer({
+                                    id: _lyr.id,
+                                    url: _lyr.url,
+                                    title: _lyr.title,
+                                    sublayers:_subLayers,
+                                    opacity: _lyr.opacity
+                                })                                   
+                            }
+    
+                            if (_layerType == "TileLayer"){
+                                var _url = _lyr.url
+                                _newLayer = new TileLayer({
+                                    url: _url,
+                                    opacity: _lyr.opacity
+                                });
+                            }
+
+                            //Add to master [_layers] object for future reference
+                                console.log(_lyr.id)
+                                _app.data.layers["lyr_" + _lyr.id] = _newLayer
+                                
+                            //Add to Map.layers                                                        
+                                _app.data.map.layers.add(_app.data.layers["lyr_" + _lyr.id])
+
+                            //TILE CACHE POPUPS
+                            //For tile caches, try to turn on a Feature-Service version so popups can be used
+                            if (_layerType == "TileLayer"){
+
+                                //New id for tile-cache's associated feature-service
+                                    var _featureServiceLayerId = _lyr.id.toString() + "_TileCache_FeatureService_ForPopups"
+                                
+                                //New layer-object for the feature-service
+                                    var _featureServiceLayer = {
+                                        id: _featureServiceLayerId,
+                                        url: _lyr.url.replace("/MapServer","/FeatureServer").replace("/mapserver","/FeatureServer")                                    
+                                    }
+
+                                //Assign the original layer's properties to this Feature-Service "layer"
+                                    Object.keys(_lyr).forEach(function(_key,_index){
+                                        if (_key != "id" && _key != "url")
+                                        _featureServiceLayer[_key] = _lyr[_key]
+                                    })
+
+                                //Add to master [_layers] object for future reference
+                                   _app.data.layers["lyr_" + (_featureServiceLayerId)] = _featureServiceLayer
+
+                                //Add to Map.layers
+                                    _app.layerAccordion.addNewLayer(_featureServiceLayer,true)
+                            }
+                        }) 
+                    },
+                    addNewLayer_ChangeEvent: function(_element){
+                        var _app = APP
+                        var _this = _app.layerAccordion
+
+                        // Listen to the onchange event for the checkbox
+                        on(_element, "click", function(_event){  
+                            
+                            //Prevent window from scrolling down past visual range (Materialize checkbox issue?)
+                            window.scrollTo(0,0)
+
+                            var _elementLayerId = parseInt(_event.target.id.replace("lyr_",""))
+				
+                            var _newLayer = _app.data.layersFromServer.filter(function(f){
+                                return f.id == _elementLayerId
+                            })[0]
+
+                            if ( typeof _app.data.layers[_event.target.id] == "undefined" ){
+                                _this.addNewLayer(_newLayer)
+                            }
+
+                            //Set layer visibility (use master [_layers] object to get the layer. Doesn't work with map.allLayers.find or map.findLayerById)	
+                            try {	
+                                //Main layer	
+                                _app.data.layers["lyr_" + _elementLayerId].visible = _element.checked
+
+                                //Tile cache feature layers
+                                _app.data.layers["lyr_" + (_elementLayerId.toString()+"_TileCache_FeatureService_ForPopups")].visible = _element.checked 
+                            }catch(e){
+
+                            }
+                        });
+                    },
+                    getFields: function(_lyr,_callback){
+                        var _app = APP
+
+                        esriRequest(_lyr.url + "/0?f=json").then(function(_response){	
+
+                            //_app.data.layers["lyr_" + _lyr.id].fields = _response.fields
+                            return _response.fields
+
+                            if (_callback){
+                                _callback()
+                            }
+                        })
+                    }
+                },
+                LevelsOfDetail: function(){
+                    // Taken from https://gist.github.com/stdavis/6e5c721d50401ddbf126
+                    // By default ArcGIS SDK only goes to zoom level 19,
+                    // In order to overcome this, we need to add more Level Of Detail (LOD) entries to both the view and the web tile layer
+                    var lods = [];
+                    var tilesize = 256;
+                    var earthCircumference = 40075016.685568;
+                    var halfEarthCircumference = halfEarthCircumference * 0.5;
+                    var inchesPerMeter = 39.37;
+                    var initialResolution = earthCircumference / tilesize;
+                    for (var zoom = 0; zoom <= 24; zoom++) {
+                        var resolution = initialResolution / Math.pow(2, zoom);
+                        var scale = resolution * 96 * inchesPerMeter;
+                        lods.push(new LOD({
+                            level: zoom,
+                            scale: scale,
+                            resolution: resolution
+                        }));
+                    }
+                    return lods
+                },
+                widget_2dMeasure: {
+                    isDrawing: false,
+                    measureResultElement: [],
+
+                    init: function(_view){
+                        var _app = APP
+                        var _this = _app.widget_2dMeasure
+
+                        var _draw = new Draw({
+                            view: _view
+                        });
+
+                        var drawLineButton = document.getElementById("line-button");
+
+                        drawLineButton.onclick = function () {
+                            if (_this.isDrawing == false){
+                                _this.enableCreateLine(_draw, _view)
+
+                                drawLineButton.style.background = "red"
+                                drawLineButton.style.color = "white"
+                                drawLineButton.classList.add("btn-floating")
+                                drawLineButton.classList.add("pulse")
+                                var _html = ''
+                                _html += '<center style="position:absolute;top:70px;left:25%;width:250px;background-color:white;border:solid 2px gray;padding:1em;">'
+                                _html += 'Measurement Result'
+                                _html += '</center>'                                
+                                _this.measureResultElement = domConstruct.toDom(_html)                        
+                                domConstruct.place(_this.measureResultElement,"mainContainer")
+
+                            }else{
+                                drawLineButton.style.background = "white"
+                                drawLineButton.style.color = "#6e6e6e"
+                                drawLineButton.classList.remove("btn-floating")
+                                drawLineButton.classList.remove("pulse")
+
+                                _this.measureResultElement.parentNode.removeChild(_this.measureResultElement)
+                            }
+
+                            _app.data.mapView.graphics.removeAll()
+
+                            _this.isDrawing = !_this.isDrawing
+                        }
+                    },
+                    enableCreateLine: function(_draw, _view) {
+                        // creates and returns an instance of PolyLineDrawAction
+                        // can only draw a line by clicking on the map
+                        var _app = APP
+                        var _this = _app.widget_2dMeasure
+
+                        var _action = _draw.create("polyline", {
+                            mode: "click"
+                        });
+
+                        // focus the view to activate keyboard shortcuts for sketching
+                        _view.focus();
+                        
+                        // listen to vertex-add event on the polyline draw action
+                        _action.on("vertex-add", _this.updateVertices);
+                        
+                        // listen to vertex-remove event on the polyline draw action
+                        _action.on("vertex-remove", _this.updateVertices);
+                        
+                        // listen to cursor-update event on the polyline draw action
+                        _action.on("cursor-update", _this.createGraphic);
+                        
+                        // listen to draw-complete event on the polyline draw action
+                        _action.on("draw-complete", _this.updateVertices);      
+                    },		
+                    updateVertices: function(_evt) {
+                        // create a polyline from returned vertices
+                        var _app = APP
+                        var _this = _app.widget_2dMeasure
+
+                        var _result = _this.createGraphic(_evt);
+
+                        // if the last vertex is making the line intersects itself, prevent "vertex-add" or "vertex-remove" from firing
+                        if (_result.selfIntersects) {
+                            _evt.preventDefault();
+                        }
+                    },
+                    createGraphic: function(_evt) {
+                        var _app = APP
+                        var _this = _app.widget_2dMeasure
+
+                        var _view = _app.data.mapView
+                        var _vertices = _evt.vertices
+                        _view.graphics.removeAll()
+
+                        // a graphic representing the polyline that is being drawn
+                        var _graphicc = new Graphic({
+                            geometry: new Polyline({
+                                paths: _vertices,
+                                spatialReference: _view.spatialReference
+                            }),
+                            symbol: {
+                                type: "simple-line", // autocasts as new SimpleFillSymbol
+                                color: [4, 90, 141],
+                                width: 4,
+                                cap: "round",
+                                join: "round"
+                            }
+                        })
+
+                        // check the polyline intersects itself.
+                        var _intersectingFeature = _this.getIntersectingFeature(_graphicc.geometry);
+                        var _lengthh = geometryEngine.planarLength(_graphicc.geometry, "feet");
+                        _this.labelAreas(_graphicc, _lengthh);
+
+                        // Add a new graphic for the intersecting segment.
+                        if (_intersectingFeature) {
+                            _view.graphics.addMany([_graphicc, _intersectingFeature]);
+                        }
+                        // Just add the graphic representing the polyline if no intersection
+                        else {
+                            _view.graphics.add(_graphicc);
+                        }
+
+                        // return the graphic and intersectingSegment
+                        return {
+                            graphic: _graphicc,
+                            selfIntersects: _intersectingFeature
+                        }
+                    },
+                    labelAreas: function(_geom, _area){
+                        var _app = APP
+                        var _this = _app.widget_2dMeasure
+
+                        var _view = _app.data.mapView
+
+                        var _numberWithCommas = function(x){
+                            return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                        }
+                        _this.measureResultElement.innerHTML = _numberWithCommas(_area.toFixed(2)) + " ft"                       
+                    },
+                    isSelfIntersecting: function(_polyline) {
+                        var _app = APP
+                        var _this = _app.widget_2dMeasure
+
+                        if (_polyline.paths[0].length < 3) {
+                            return false
+                        }
+                        var _line = _polyline.clone()
+
+                        //get the last segment from the polyline that is being drawn
+                        var _lastSegment = _this.getLastSegment(_polyline)
+                        _line.removePoint(0, _line.paths[0].length - 1)
+
+                        // returns true if the line intersects itself, false otherwise
+                        return geometryEngine.crosses(_lastSegment, _line)
+                    },
+                    getIntersectingFeature: function(_polyline) {
+                        var _app = APP
+                        var _this = _app.widget_2dMeasure
+
+                        if (_this.isSelfIntersecting(_polyline)) {
+                            return new Graphic({
+                                geometry: _this.getLastSegment(polyline),
+                                symbol: {
+                                    type: "simple-line", // autocasts as new SimpleLineSymbol
+                                    style: "short-dot",
+                                    width: 3.5,
+                                    color: "yellow"
+                                }
+                            });
+                        }
+                        return null;
+                    },
+                    getLastSegment: function(_polyline) {
+                        var _app = APP
+                        var _this = _app.widget_2dMeasure
+
+                        var _line = _polyline.clone();
+                        var _lastXYPoint = _line.removePoint(0, _line.paths[0].length - 1);
+                        var _existingLineFinalPoint = _line.getPoint(0, _line.paths[0].length -1);
+
+                        return new Polyline({
+                            spatialReference: _app.data.mapView.spatialReference,
+                            hasZ: false,
+                            paths: [[
+                                [_existingLineFinalPoint.x, _existingLineFinalPoint.y],
+                                [_lastXYPoint.x, _lastXYPoint.y]
+                            ]]
+                        });
+                    }
+                },
+                setIsMobile: function(){
+                    var _app = this
+                    
+                    if (matchMedia) {
+                        var mq = window.matchMedia("(min-width: 993px)"); //Materialize min-width for tablet
+                        mq.addListener(WidthChange);
+                        WidthChange(mq);
+                    }
+
+                    // media query change
+                    function WidthChange(mq) {
+
+                        if (mq.matches){
+                            _app.data.isMobile = false
+
+                            //Set zoom to 13
+                            _app.data.mapZoom = 13
+
+                            //Layers list - show extra info
+                            query(".layerToggle_ExtraInfo").style("display","block")
+
+                            //Move the map-element and layer-list-element to their appropriate containers
+                            domConstruct.place("viewDiv","mapContainerLarge")
+                            domConstruct.place("layerToggle","layersContainerLarge")
+
+                        }else{
+                            _app.data.isMobile = true
+                            
+                            //Set basemap to Esri Streets for faster loading
+                            _app.data.basemap = "streets"
+                            
+                            //Hide navbar
+                            document.querySelector("nav").style.display = "none"
+                            document.querySelector("#mainContainer").style.height = "100%"
+                            document.querySelector("#mainContainer").style.margin = "0"
+
+                            //Set zoom to 12
+                            _app.data.mapZoom = 12
+
+                            //Layers list - dont show extra info
+                            query(".layerToggle_ExtraInfo").style("display","none")
+                            
+                            //Move the map-element and layer-list-element to their appropriate containers
+                            domConstruct.place("viewDiv","mapContainerSmall")
+                            domConstruct.place("layerToggle","layersContainerSmall")
+                        }
+                    }
+                },
+                setIsEmployee: function(){
+                    var _app = this
+
+                    if (typeof window.localStorage.colEmail != "undefined"){
+                        _app.data.isEmployee = true
+                        _app.data.username = window.localStorage.colEmail
+                        var _elems = document.querySelectorAll(".username")
+                        for (var i=0; i< _elems.length; i++){
+                            _elems[i].innerHTML = window.localStorage.colEmail
+                        }
+                    }else{
+                        var _elems = document.querySelectorAll(".username")
+                        for (var i=0; i< _elems.length; i++){
+                            var _elem = _elems[i]
+                            _elem.text = "Employee Login"
+                            _elem.style.textDecoration = "underline"
+                            _elem.href='https://maps.cityoflewisville.com/oauthredirect?originalurl=' + encodeURIComponent(window.location.href)
+                        }
+                    }
+                },
+                isJSON: function(jsonString){
+                    try {
+                        var o = JSON.parse(jsonString);
+                        if (o && typeof o === "object") {
+                            return o
+                        }
+                    }
+                    catch (e) { }
+
+                    return false;
+                },
+                settings: {
+                    applyFromUrl: function(){
+                        var _app = APP
+                        var _this = _app.settings
+                        
+                        _this.app.zoom.set( _this.url.get("zoom") )
+                        _this.app.center.set( _this.url.get("center") )
+
+                        _this.app.basemap.set( _this.url.get("basemap"))
+                        _this.app.layers.set (_this.url.get("layers") )
+                        
+                    },
+                    saveToUrl: function(){
+                        var _app = APP
+                        var _this = _app.settings
+                        var _baseUrl = window.location.origin + window.location.pathname
+
+                        var _parameters =  "&zoom=" + _this.app.zoom.get() + "&amp;center=" + _this.app.center.get() + "&basemap=" + _this.app.basemap.get() + "&layers=" + _this.app.layers.get()
+                        
+                        var _html = ' <small class="hide-on-med-and-down">'
+                            _html += ' <a id="saveToUrlSpan" href="' + _baseUrl + "?" + _parameters + '">' + _baseUrl + "?" + _parameters.substr(0,10) + '...</a>'
+                            _html += ' <button id="copyToClipboardButton" class="btn-flat toast-action">Copy to Clipboard</button>'
+                            _html += '</small>'
+
+                            _html += '<small class=" hide-on-med-and-up show-on-small">'
+                            _html += ' <a id="saveToUrlSpan" href="' + _baseUrl + "?" + _parameters + '">' + (_baseUrl + "?" + _parameters).substr(0,35) + '...</a>'
+                            _html += ' <button id="copyToClipboardButton" class="btn-flat toast-action">Copy</button>'
+                            _html += '</small>'
+
+                        M.toast({
+                            html: _html,
+                            displayLength: 10000
+                        })
+
+                        on(dom.byId("copyToClipboardButton"),"click",function(_event){ 
+                           
+                           //Copy url to clipboard
+                            _app.settings.copyToClipboard(dom.byId("saveToUrlSpan").href)
+                            
+                            var toastElement = document.querySelector('.toast');
+                            var toastInstance = M.Toast.getInstance(toastElement);
+                            toastInstance.dismiss();
+
+                            M.toast({html: 'Url copied to clipbboard'})
+                        })
+                    },
+                    copyToClipboard: function(str){
+                        var el = document.createElement('textarea');
+                        el.value = str;
+                        el.setAttribute('readonly', '');
+                        el.style.position = 'absolute';
+                        el.style.left = '-9999px';
+                        document.body.appendChild(el);
+                        el.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(el);
+                    },
+                    url: {                        
+                        get: function(_name){
+                            return decodeURIComponent((new RegExp('[?|&|]' + _name.toLowerCase() + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search.toLowerCase())||[,""])[1].replace(/\+/g, '%20'))||null;
+                        },
+                        set: function(_name){
+
+                        }
+                    },
+                    app: {
+                        zoom: {
+                            get: function(){
+                                var _app = APP
+                                return _app.data.mapView.zoom
+                            },
+                            set: function(_zoom){
+                                var _app = APP
+                                if (_zoom != null){
+                                    _app.data.mapView.zoom = _zoom
+                                }
+                            }
+                        },
+                        center: {
+                            get: function(){
+                                var _app = APP
+                                return _app.data.mapView.center.latitude + "," + _app.data.mapView.center.longitude
+                            },
+                            set: function(_latLngString){
+                                var _app = APP
+                                if (_latLngString != null){
+                                    _app.data.mapView.center = [_latLngString.split(",")[1], _latLngString.split(",")[0]]                            
+                                }
+                            }
+                        },
+                        basemap: {
+                            get: function(){
+                                var _app = APP
+                                return _app.data.map.basemap.id
+                            },
+                            set: function(_basemap){
+                                var _app = APP
+
+                                //Esri basemaps
+                                if (_basemap != null && _basemap.toLowerCase().substr(0,8) != "nearmap_"){
+                                    _app.data.map.basemap = _basemap
+
+                                //Nearmap Aerials
+                                }else{
+                                    var _formattedDate = _basemap.substr(8,4) + '-' + _basemap.substr(12,2) + '-' + _basemap.substr(14,2)
+                                    document.querySelector('[title="Lewisville Aerials: (' +  _formattedDate + ')"]').click()
+                                }
+                            }
+                        },
+                        layers: {
+                            get: function(){
+                                var _app = APP
+                                var _layerIds = []
+                                
+                                Object.keys(_app.data.layers).forEach(function(_lyr){
+                                    var _layerSettings = _app.data.layersFromServer.filter(function(s){
+                                        return s.id == _lyr.replace("lyr_","")
+                                    })[0]
+
+                                    if (_app.data.layers[_lyr].visible == true && _lyr.length == 8 && _layerSettings.openonload.toLowerCase() != "true"){                                        
+                                        _layerIds.push(_lyr.replace("lyr_",""))
+                                    }
+                                })
+
+                                console.log(_layerIds.join(","))
+                                return _layerIds.join(",")
+                            },
+                            set: function(_layers,_timeout){
+                                var _app = APP                                
+                                if (_layers != null){
+                                    _layers.split(",").forEach(function(_lyrId){
+                                        setTimeout(function(){
+                                            var _element = dom.byId("lyr_" + _lyrId)
+                                            if (_element != null){
+                                                dom.byId("lyr_" + _lyrId).click()  
+                                            }
+                                        },(_timeout || 500))                                                                          
+                                    })
+                                }
+                            }
+                        }
+                    }
+                }
+            } //end return
+        })() //end APP
+        
+        //Master init()
+        APP.init();
+
+	}) //end REQUIRE    
+
+	//Materialize widget initialization
+	document.addEventListener('DOMContentLoaded', function() {
+    	var elems = document.querySelector('.collapsible');
+    	var instances = M.Collapsible.init(elems);
+
+        var _sidenavs = document.querySelector('.sidenav');
+        var _sidenavs_instances = M.Sidenav.init(_sidenavs);
+
+        var _tooltips = document.querySelectorAll('.tooltipped');
+        var _tooltips_instances = M.Tooltip.init(_tooltips);
+
+        var _tabs = document.querySelectorAll('.tabs');
+        var _tabs_instances = M.Tabs.init(_tabs);
+ 	});
+
+  </script>
+</head>
+
+<body>
+	<!--Navbar-->
+    <nav>
+        <div class="nav-wrapper" style="background-color:#5E2590;">
+                <a href="#" class="brand-logo" style="margin-left: 1vw;font-size: 1.5em;">City of Lewisville <small class="yellow-text hide-on-med-and-down">(GIS)</small></a>
+            <a href="#" data-target="mobile-demo" class="sidenav-trigger"><i class="material-icons">menu</i></a>
+            <ul class="right hide-on-med-and-down">
+                <li><a class="username grey-text lighten-5" href="http://maps.cityoflewisville.com/oauthredirect/index.html">-</a></li>
+                <li><a class="saveButton" href=""><i class="material-icons right">save</i> Save</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!--Mobile Menu-->
+    <ul class="sidenav" id="mobile-demo">
+        <li><a class="username grey-text lighten-5" href="http://maps.cityoflewisville.com/oauthredirect/index.html">-</a></li>
+        <li><a class="saveButton" href=""><i class="material-icons right">save</i> Save</a></li>               
+    </ul>
+
+    <!--Loading-->
+    <div class="progress yellow">
+        <div class="indeterminate"></div>
+    </div>
+
+	<!--Main container-->
+	<div id="mainContainer" class="row">
+
+        <!--Mobile Tabs-->
+        <ul class="tabs tabs-fixed-width z-depth-1 hide-on-large-only">
+            <li class="tab"><a href="#Map" class="active blue-text">Map</a></li>
+            <li class="tab"><a href="#Layers" class="blue-text">Layers</a></li>
+        </ul>
+        <div id="Map" class="col s12 hide-on-large-only">
+            <div id="mapContainerSmall" class="row" style="margin-bottom:0;"></div>
+        </div>
+        <div id="Layers" class="col s12 hide-on-large-only">
+            <div id="layersContainerSmall" class="row"></div>
+        </div>
+
+        <!--Map container-->
+        <div id="mapContainerLarge" class="col m9 s12" style="padding:0;margin:0;">
+            <div class="row" style="padding:0;margin:0;">
+                <div id="viewDiv" class="col s12"></div>
+            </div>
+        </div>
+		
+       
+		<!--Layer-List container-->
+		<div id="layersContainerLarge" class="col m3 s12">
+            <ul id="layerToggle" class="collapsible"></ul>					
+		</div>       
+
+    </div> <!--end main container-->
+
+    <!--============================-->
+    <!--Google Analytics-->
+    <!--https://www.google.com/analytics/web/?authuser=0#realtime/rt-content/a35815214w63720524p65383322/-->
+    <!--============================-->
+    <script type="text/javascript"> var _gaq = _gaq || []; _gaq.push(['_setAccount', 'UA-35815214-1']); _gaq.push(['_trackPageview']); (function () { var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true; ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js'; var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s); })(); </script>
+  
+    
+</body>
+
+</html>

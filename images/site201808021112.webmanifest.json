@@ -1,0 +1,21 @@
+{
+    "name": "City of Lewisville - GIS",
+    "short_name": "GIS",
+    "theme_color": "#5E2590",
+    "background_color": "#5E2590",
+    "display": "standalone",
+    "scope": "/",
+    "start_url": "maps.cityoflewisville.com/beta",
+    "icons": [
+      {
+          "src": "/android-chrome-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+      },
+      {
+          "src": "/android-chrome-256x256.png",
+          "sizes": "256x256",
+          "type": "image/png"
+      }
+  ]
+}
