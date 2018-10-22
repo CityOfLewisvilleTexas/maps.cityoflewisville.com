@@ -114,6 +114,7 @@
       "esri/layers/WebTileLayer",
       "esri/layers/TileLayer",
       "esri/layers/FeatureLayer",
+      "esri/layers/VectorTileLayer",
       "esri/layers/support/LOD",
 
 	  "esri/request",
@@ -126,6 +127,7 @@
       "esri/widgets/Expand",
       "esri/widgets/Search",
       "esri/widgets/Legend",
+      "esri/widgets/CoordinateConversion",
 
       "esri/core/watchUtils",
       "esri/tasks/Locator",
@@ -145,8 +147,9 @@
       "dojo/domReady!"
     ], function(
       Map, MapView, 
-      MapImageLayer, WebTileLayer, TileLayer,FeatureLayer, LOD,
-      esriRequest, esriConfig, Basemap, BasemapGallery, LocalBasemapsSource, Print, Expand, Search, Legend, watchUtils, Locator,
+      MapImageLayer, WebTileLayer, TileLayer,FeatureLayer, VectorTileLayer, LOD,
+      esriRequest, esriConfig, Basemap, BasemapGallery, LocalBasemapsSource, Print, Expand, Search, Legend, CoordinateConversion,
+      watchUtils, Locator,
 	  Draw, Graphic, Polyline, geometryEngine, webMercatorUtils, 
 	  dom, on, query, xhr, domConstruct,ProgressBar
     ) {
@@ -183,6 +186,7 @@
                     _app.createWidget_SaveSettings()	 
                     _app.createWidget_MapTypeButtons()
                     _app.createWidget_Legend()
+                    _app.createWidget_Marker()
                     _app.setIsEmployee()
                     _app.get_GroupsList(
                         function(){
@@ -380,6 +384,34 @@
                         var _tooltips = document.querySelectorAll('.tooltipped')
                         var _tooltips_instances = M.Tooltip.init(_tooltips)
                     }
+                },
+                createWidget_Marker: function(){
+                    var _app = this
+                     
+                    var _html = ''
+                        _html += '<div id="marker-button" class="waves-effect esri-widget--button esri-widget esri-interactive tooltipped" '
+                        _html += ' data-position="left" data-tooltip="Get Coordinates →">'
+                        _html += ' <span class="esri-icon-locate"></span>'
+                        _html += '</div>'
+
+                    var _domElement = domConstruct.toDom(_html)                        
+                    domConstruct.place(_domElement,"viewDiv") 
+                    
+                    //Materialize Tooltips
+                    if (window.M){
+                        var _tooltips = document.querySelectorAll('.tooltipped');
+                        var _tooltips_instances = M.Tooltip.init(_tooltips);
+                        var _thisTooltip = M.Tooltip.getInstance(_domElement)                        
+                    }
+
+                    _app.data.mapView.ui.add("marker-button", "top-right");
+                
+                    document.getElementById("marker-button").addEventListener("click",function(_event){
+                        var ccWidget = new CoordinateConversion({
+                            view: _app.data.mapView
+                        })
+                        _app.data.mapView.ui.add(ccWidget, "bottom-left")
+                    })
                 },
                 createNearmapAerials: function(){
                     //https://developers.arcgis.com/javascript/latest/api-reference/esri-Map.html#basemap
@@ -695,11 +727,12 @@
                         var _this = _app.layerAccordion
                         var _employeesOnlyLabel = ' <small class="yellow lighten-4" style="padding:0.5em; font-weight:bold; font-size:0.6em;" title="This layer is visible only to employees who are logged-in.">*Employee-Only</small>'
                         var _hideFromUserLayers = (_layer.hidefromuser.toLowerCase() == "true" ? 'display:none;' : '')
-                        
+                        console.log(_layer)
                         var _html =  '<div style="'+_hideFromUserLayers+'">'
                             _html += ' <label>'
-                            _html += '   <input type="checkbox" id="lyr_'+_layer.id+'" '+(_layer.openonload.toLowerCase() == "true" ? "checked" : "")+'>'
+                            _html += '   <input type="checkbox" id="lyr_'+_layer.id+'" '+(_layer.openonload.toLowerCase() == "true" ? "checked" : "")+'>'                            
                             _html += '   <span class="black-text">' + _layer.label + (_layer.employeesonly.toLowerCase() == "true" ? _employeesOnlyLabel : '') + '</span>'
+                            _html += ( _layer.refreshinterval != '' ? '   <span title="Auto-refreshes every '+_layer.refreshinterval+' seconds"><i class="material-icons tiny">autorenew</i></span>' : '' )
                             _html += ' </label>'
                             _html += '</div>'
 
@@ -732,12 +765,26 @@
                         var _layerType = 'MapImageLayer'
                         
                         esriRequest(_lyr.url + "?f=json").then(function(_response){	
-                            
-                            if (_response.data.hasOwnProperty("tileInfo") == true){
-                                _layerType = "TileLayer"
+                            if (_response.data.hasOwnProperty("type") && _response.data.type == "indexedVector"){
+                                _layerType = "VectorTileLayer"
                             }
 
+                            if (_response.data.hasOwnProperty("tileInfo") == true && _response.data.hasOwnProperty("type") == false){
+                                _layerType = "TileLayer"
+                            }
+                            
                             var _newLayer = {}
+
+                           //Vector Tile Layers (add these before sublayers)
+                            if (_layerType == "VectorTileLayer"){
+                                var _url = _lyr.url
+                                _newLayer = new VectorTileLayer({
+                                    url: _url
+                                });
+                                console.log("adding vtl to map")
+                                _app.data.map.basemap = 'streets'
+                                _app.data.map.add(_newLayer)
+                            }
 
                             //Sublayers
                             var _subLayers = []
@@ -766,8 +813,9 @@
                                     url: _lyr.url,
                                     title: _lyr.title,
                                     sublayers:_subLayers,
-                                    opacity: _lyr.opacity
-                                })                                   
+                                    opacity: _lyr.opacity,
+                                    refreshInterval: (_lyr.refreshinterval / 60)
+                                })                                
                             }
     
                             if (_layerType == "TileLayer"){
@@ -777,13 +825,14 @@
                                     opacity: _lyr.opacity
                                 });
                             }
+                            
 
                             //Add to master [_layers] object for future reference
-                                console.log(_lyr.id)
                                 _app.data.layers["lyr_" + _lyr.id] = _newLayer
                                 
                             //Add to Map.layers                                                        
                                 _app.data.map.layers.add(_app.data.layers["lyr_" + _lyr.id])
+                               
 
                             //TILE CACHE POPUPS
                             //For tile caches, try to turn on a Feature-Service version so popups can be used
@@ -836,6 +885,11 @@
                             try {	
                                 //Main layer	
                                 _app.data.layers["lyr_" + _elementLayerId].visible = _element.checked
+
+                                //Vector Tile layer	
+                                if (_element.checked == true){
+                                    _app.data.map.remove( _app.data.layers["lyr_" + _elementLayerId])
+                                }
 
                                 //Tile cache feature layers
                                 _app.data.layers["lyr_" + (_elementLayerId.toString()+"_TileCache_FeatureService_ForPopups")].visible = _element.checked 
