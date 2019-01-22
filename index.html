@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -727,7 +728,8 @@
                         var _this = _app.layerAccordion
                         var _employeesOnlyLabel = ' <small class="yellow lighten-4" style="padding:0.5em; font-weight:bold; font-size:0.6em;" title="This layer is visible only to employees who are logged-in.">*Employee-Only</small>'
                         var _hideFromUserLayers = (_layer.hidefromuser.toLowerCase() == "true" ? 'display:none;' : '')
-                        console.log(_layer)
+                        //console.log(_layer)
+
                         var _html =  '<div style="'+_hideFromUserLayers+'">'
                             _html += ' <label>'
                             _html += '   <input type="checkbox" id="lyr_'+_layer.id+'" '+(_layer.openonload.toLowerCase() == "true" ? "checked" : "")+'>'                            
@@ -749,7 +751,7 @@
                         
                         _this.addNewLayer_ChangeEvent(_toggle)
                     },            
-                    addNewLayer: function(_lyr, _visible){
+                    addNewLayer: function(_lyr, _visible,_callback){
                         var _app = APP
                         var _this = _app.layerAccordion
                         
@@ -859,6 +861,11 @@
                                 //Add to Map.layers
                                     _app.layerAccordion.addNewLayer(_featureServiceLayer,true)
                             }
+
+                            //Callback?
+                            if (_callback){
+                                _callback()
+                            }
                         }) 
                     },
                     addNewLayer_ChangeEvent: function(_element){
@@ -866,7 +873,7 @@
                         var _this = _app.layerAccordion
 
                         // Listen to the onchange event for the checkbox
-                        on(_element, "click", function(_event){  
+                        on(_element, "click", function(_event){
                             
                             //Prevent window from scrolling down past visual range (Materialize checkbox issue?)
                             window.scrollTo(0,0)
@@ -877,13 +884,27 @@
                                 return f.id == _elementLayerId
                             })[0]
 
+                            //If this layer doesn't exist in app.data.layers, add it
                             if ( typeof _app.data.layers[_event.target.id] == "undefined" ){
-                                _this.addNewLayer(_newLayer)
+                                console.log('typeof _app.data.layers[_event.target.id] == "undefined"')
+                                _this.addNewLayer(_newLayer,false,function(){
+                                    setVisibility()
+                                }) 
+                            }else{    
+                                if (_element.checked == false){     
+                                    _app.data.layers["lyr_" + _elementLayerId].visible = false                   
+                                    delete _app.data.layers["lyr_" + _elementLayerId]
+                                }else{
+                                    _this.addNewLayer(_newLayer,false,function(){
+                                        setVisibility()
+                                    })
+                                }
                             }
-
+                        });
+                        function setVisibility(){
                             //Set layer visibility (use master [_layers] object to get the layer. Doesn't work with map.allLayers.find or map.findLayerById)	
                             try {	
-                                //Main layer	
+                                //Main layer                                
                                 _app.data.layers["lyr_" + _elementLayerId].visible = _element.checked
 
                                 //Vector Tile layer	
@@ -894,9 +915,9 @@
                                 //Tile cache feature layers
                                 _app.data.layers["lyr_" + (_elementLayerId.toString()+"_TileCache_FeatureService_ForPopups")].visible = _element.checked 
                             }catch(e){
-
+                                //console.log(e)
                             }
-                        });
+                        }
                     },
                     getFields: function(_lyr,_callback){
                         var _app = APP
